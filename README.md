@@ -5,7 +5,7 @@ This is the official implementation of the MICCAI 2022 paper: *What Makes for Au
 \*: Equal contributions.  
 \*\*: Corresponding author.
 
-![Network figure](./figures/network.pdf)
+![Network figure](./figures/network.png)
 
 # Citation
 
