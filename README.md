@@ -13,7 +13,7 @@ If you find our work useful, please consider citing as follows:
 ```
 @inproceedings{Kuang2022WhatMF,
   title={What Makes for Automatic Reconstruction of Pulmonary Segments},
-  author={Kaiming Kuang and Li Zhang and Jingyuan Li and Hongwei Li and Jiajun Chen and Bo Du and Jiancheng Yang},
+  author={Kaiming Kuang and Li Zhang and Jingyu Li and Hongwei Li and Jiajun Chen and Bo Du and Jiancheng Yang},
   booktitle={International Conference on Medical Image Computing and Computer-Assisted Intervention},
   year={2022}
 }

@@ -10,7 +10,6 @@ import pandas as pd
 import torch
 import torch.nn as nn
 from torch import optim
-from torch.utils.tensorboard import SummaryWriter
 
 from data.dataset import LungSegmentDataset
 from data import transforms as aug
@@ -188,7 +187,7 @@ def main():
     global cfg
     cfg = import_module(f"configs.{args.cfg}_config")
 
-    dl_train, dl_val = _init_dataloaders()
+    dl_train, dl_val = _init_dataloaders(args)
 
     model = _init_model(args)
     criterion = SegLoss(cfg.w_ce, cfg.w_dice, 19)
@@ -196,12 +195,12 @@ def main():
     scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer,
         len(dl_train) * cfg.epochs, cfg.min_lr)
 
-    # set up tensorboard
+    # set up logging
     log_dir = args.log_dir
     cur_time = datetime.now().strftime("%Y%m%d-%H%M%S")
     print(cur_time)
     log_dir = os.path.join(log_dir, cur_time)
-    tb_writer = SummaryWriter(log_dir)
+    os.makedirs(log_dir)
     time_train = 0
 
     for i in range(cfg.epochs):
@@ -214,10 +213,9 @@ def main():
         if (i + 1) % cfg.eval_freq == 0:
             res_val = _eval_epoch(model, dl_val, criterion)
             _log_metrics(res_train, res_val)
-            _log_tensorboard(tb_writer, i, res_train, res_val)
 
             torch.save(model.state_dict(), os.path.join(log_dir,
-                f"model_{i}.pth"))
+                f"model_{i + 1}.pth"))
 
     print(f"Total training time: {time_train:.4f}")
 

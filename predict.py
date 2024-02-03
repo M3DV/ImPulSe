@@ -19,7 +19,7 @@ from utils.logger import logger
 
 def _parse_cmd_args():
     arg_parser = ArgumentParser()
-    arg_parser.add_argument("--gpu", default="0,1,2,3", help="GPU ID.")
+    arg_parser.add_argument("--gpu", default="0", help="GPU ID.")
     arg_parser.add_argument("--cfg", required=True,
         help="Python config module.")
     arg_parser.add_argument("--data_dir", required=True,
@@ -121,7 +121,7 @@ def _sliding_window_predict(model, inputs, grids, window_size):
             bboxes[i, 0, 0]:bboxes[i, 0, 1],
             bboxes[i, 1, 0]:bboxes[i, 1, 1],
             bboxes[i, 2, 0]:bboxes[i, 2, 1]
-        ] = output_patch
+        ] = output_patch.transpose((2, 1, 0))
 
     return output
 
@@ -178,7 +178,7 @@ def main():
     global cfg
     cfg = import_module(f"configs.{args.cfg}_config")
 
-    dl_val, dl_test = _init_dataloaders()
+    dl_val, dl_test = _init_dataloaders(args)
 
     model = _init_model(args)
     model_weights = _load_weights(args.weight_path)
