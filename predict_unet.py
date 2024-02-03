@@ -3,11 +3,11 @@ import random
 from argparse import ArgumentParser
 from importlib import import_module
 
+import SimpleITK as sitk
 import numpy as np
 import pandas as pd
 import torch
 import torch.nn as nn
-from dntk import medimg
 from tqdm import tqdm
 
 from data.dataset import LungSegmentDataset
@@ -120,8 +120,8 @@ def _predict(model, dataloader, output_dir, subset, interpolation):
                 bboxes[j, 2, 0]:bboxes[j, 2, 1] + 1
             ] = pred_lung
 
-            y_pred_img = medimg.Image(y_pred)
-            medimg.save_image(y_pred_img, os.path.join(output_dir, subset,
+            y_pred_img = sitk.GetImageFromArray(y_pred)
+            sitk.WriteImage(y_pred_img, os.path.join(output_dir, subset,
                 f"{pids[j]}_pred.nii.gz"))
 
         progress.update()
