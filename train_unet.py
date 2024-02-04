@@ -200,7 +200,6 @@ def main():
     cur_time = datetime.now().strftime("%Y%m%d-%H%M%S")
     print(cur_time)
     log_dir = os.path.join(log_dir, cur_time)
-    tb_writer = SummaryWriter(log_dir)
     time_train = 0
 
     for i in range(cfg.epochs):
@@ -213,7 +212,6 @@ def main():
         if (i + 1) % cfg.eval_freq == 0:
             res_val = _eval_epoch(model, dl_val, criterion)
             _log_metrics(res_train, res_val)
-            _log_tensorboard(tb_writer, i, res_train, res_val)
 
             torch.save(model.state_dict(), os.path.join(log_dir,
                 f"model_{i}.pth"))
