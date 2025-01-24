@@ -1,5 +1,5 @@
 import os
-
+import SimpleITK as sitk
 import numpy as np
 import torch
 from torch.utils.data import DataLoader, Dataset
@@ -23,22 +23,6 @@ def _collate_infer(samples):
     return inputs, grids, pids, bboxes, shapes
 
 
-def _collate_unet(samples):
-    inputs = torch.stack([x["inputs"] for x in samples])
-    targets = torch.stack([x["targets"] for x in samples])
-
-    return inputs, targets
-
-
-def _collate_unet_infer(samples):
-    inputs = torch.stack([x["inputs"] for x in samples])
-    targets = torch.stack([x["targets"] for x in samples])
-    pids = [x["pid"] for x in samples]
-    bboxes = np.stack([x["lung_bbox"] for x in samples])
-    shapes = [x["raw_res"] for x in samples]
-
-    return inputs, targets, pids, bboxes, shapes
-
 
 class LungSegmentDataset(Dataset):
 
@@ -46,7 +30,7 @@ class LungSegmentDataset(Dataset):
         self.df = df.loc[df.subset == subset].reset_index(drop=True)
         self.data_dir = data_dir
         self.transforms = transforms
-
+        
     def __len__(self):
         return len(self.df)
 
@@ -57,13 +41,25 @@ class LungSegmentDataset(Dataset):
         return data
 
     def __getitem__(self, idx):
-        data_path = os.path.join(self.data_dir, f"{self.df.pid[idx]}.npz")
-        data = np.load(data_path)
-        data = {k: v for k, v in data.items()}
+        data_path = os.path.join(self.data_dir, f"{self.df.pid[idx]}")
+
+        data = {}
         data["pid"] = self.df.pid[idx]
+        
+        airway_image = sitk.ReadImage(os.path.join(data_path, "airway.nii.gz"))
+        data['airway'] =  sitk.GetArrayFromImage(airway_image)
 
+        artery_image = sitk.ReadImage(os.path.join(data_path, "artery.nii.gz"))
+        data['artery'] =  sitk.GetArrayFromImage(artery_image)
+
+        vein_image = sitk.ReadImage(os.path.join(data_path, "vein.nii.gz"))
+        data['vein'] =  sitk.GetArrayFromImage(vein_image)
+        
+        lungsegment_image = sitk.ReadImage(os.path.join(data_path, "lungsegment.nii.gz"))
+        data['lungsegment'] =  sitk.GetArrayFromImage(lungsegment_image)
+        
         data = self._apply_transforms(data)
-
+        
         return data
 
     @staticmethod
@@ -77,13 +73,4 @@ class LungSegmentDataset(Dataset):
             return DataLoader(dataset, batch_size, shuffle,
                 num_workers=num_workers,
                 collate_fn=_collate_infer)
-        elif mode == "unet":
-            return DataLoader(dataset, batch_size, shuffle,
-                num_workers=num_workers,
-                collate_fn=_collate_unet)
-        elif mode == "unet_infer":
-            return DataLoader(dataset, batch_size, shuffle,
-                num_workers=num_workers,
-                collate_fn=_collate_unet_infer)
-        else:
-            raise ValueError(f"Unrecognized mode {mode}.")
+

@@ -13,6 +13,27 @@ INTERPOLATIONS = {
     "bspline": sitk.sitkBSpline,
 }
 
+def _fist_index_not_zero(volume):
+    slice_sum = volume.sum(-1).sum(-1)
+    lenth = len(slice_sum)
+    for i in range(lenth):
+        if slice_sum[i]>0:
+            break
+    first = i
+    for i in range(lenth-1, -1, -1):
+        if slice_sum[i]>0:
+            break        
+    last = i
+    return [first, last]
+
+
+def get_bbox_from_mask(volume):
+    crop = []
+    crop.append(_fist_index_not_zero(volume))
+    crop.append(_fist_index_not_zero(volume.transpose(1,0,2)))
+    crop.append(_fist_index_not_zero(volume.transpose(2,0,1)))
+    return np.array(crop)
+
 
 def _resample(image, target_spacing, target_shape, interpolation):
     # set up resampling parameters
@@ -51,16 +72,24 @@ def _resample_to_shape(arr, target_shape, interpolation):
     return new_arr
 
 
+class GetLungBbox:
+        
+    def __call__(self, data):
+ 
+        data["lung_bbox"] = get_bbox_from_mask(data["lungsegment"])
+        return data
+
+
 class CropLung:
 
     def __call__(self, data):
         bbox = data["lung_bbox"]
-        data["raw_res"] = data["image"].shape
+        data["raw_res"] = data["lungsegment"].shape
         data["raw_lungsegment"] = deepcopy(data["lungsegment"])
         data["raw_airway"] = deepcopy(data["airway"])
         data["raw_artery"] = deepcopy(data["artery"])
         data["raw_vein"] = deepcopy(data["vein"])
-        keys = ["image", "airway", "artery", "vein", "lungsegment"]
+        keys = ["airway", "artery", "vein", "lungsegment"]
         for k in keys:
             data[k] = data[k][
                 bbox[0, 0]:bbox[0, 1] + 1,
@@ -75,11 +104,11 @@ class GetLobe:
 
     def __init__(self):
         self.lobe_mapping = {
-            (1, 3): 1,
-            (4, 5): 2,
-            (6, 9): 3,
-            (10, 13): 4,
-            (14, 17): 5
+        (1, 3): 1,
+        (4, 5): 2,
+        (6, 10): 3,
+        (11, 14): 4,
+        (15, 18): 5
         }
     
     def __call__(self, data):
@@ -100,7 +129,7 @@ class Resample:
         self.configs = configs
 
     def __call__(self, data):
-        data["original_res"] = data["image"].shape
+        data["original_res"] = data["lungsegment"].shape
         for k in self.configs.keys():
             if k in ["airway", "artery"]:
                 data[f"original_{k}"] = deepcopy(data[k])
@@ -156,8 +185,6 @@ class ConcatInputs:
         self.keys = keys
 
     def __call__(self, data):
-        if "grids" in self.keys:
-            data["grids"] = data["grids"].permute(3, 0, 1, 2)
         data["inputs"] = np.concatenate([data[k] if data[k].ndim == 4
             else data[k][np.newaxis] for k in self.keys])
 
@@ -166,7 +193,7 @@ class ConcatInputs:
 
 class SampleGrid:
 
-    def __init__(self, resolution=None, mode="regular"):
+    def __init__(self, resolution=None, mode="uniform"):
         self.resolution = resolution
         if resolution is None:
             self.reg_grid = None
@@ -175,14 +202,12 @@ class SampleGrid:
             self.reg_grid = torch.stack(torch.meshgrid(axes[2], axes[1],
                 axes[0], indexing="ij"), -1)
 
-        assert mode in ["regular", "perturbed", "random", "weighted"]
+        assert mode in ["uniform", "perturbed", "random", "bav"]
         self.mode = mode
         if self.mode == "perturbed":
             self.sampler = Uniform(-(2 / resolution), 2 / resolution)
-        elif self.mode == "random":
+        elif self.mode == "random" or self.mode == "bav":
             self.sampler = Uniform(-1, 1)
-        elif self.mode == "weighted":
-            self.random_sampler = Uniform(-1, 1)
 
     def __call__(self, data):
         if self.resolution is None:
@@ -190,28 +215,45 @@ class SampleGrid:
             axes = [torch.linspace(-1, 1, resolution[i]) for i in range(3)]
             self.reg_grid = torch.stack(torch.meshgrid(axes[2], axes[1],
                 axes[0], indexing="ij"), -1)
-        if self.mode == "regular":
+        if self.mode == "uniform":
             data["grids"] = self.reg_grid
         elif self.mode == "perturbed":
             pertubations = self.sampler.sample(self.reg_grid.size())
             data["grids"] = self.reg_grid + pertubations
-        elif self.mode == "weighted":
-            n_pts = self.reg_grid.nelement() // 3
-            rnd_coords = self.random_sampler.sample((n_pts // 2, 3))
-            lungseg_mask = torch.from_numpy(data["lungsegment"] > 0)\
-                .permute(2, 1, 0).reshape(-1)
-            axes = [torch.linspace(-1, 1, data["lungsegment"].shape[i])
-                for i in range(3)]
-            full_grid = torch.stack(torch.meshgrid(axes[2], axes[1],
-                axes[0], indexing="ij"), -1)
-            lungseg_coords = full_grid.view(-1, 3)[lungseg_mask, :]
-            lungseg_coords = lungseg_coords[torch.randint(0,
-                lungseg_coords.size(0), (n_pts // 2, ))]
-            data["grids"] = torch.cat((rnd_coords, lungseg_coords), dim=0)
-            d, h, w = self.resolution
-            data["grids"] = data["grids"].view(w, h, d, 3)
-        else:
+        elif self.mode == "random":
+
             data["grids"] = self.sampler.sample(self.reg_grid.size())
+        elif self.mode == "bav":
+
+            bav_mask = np.logical_or(data["airway"] > 0,
+            np.logical_or(data["artery"] > 0, data["vein"] > 0))
+            vol_shape = np.array(data["airway"].shape)
+
+            bav_coords = np.argwhere(bav_mask)
+
+            # calculate total number of index for the grid
+            n_pts = self.reg_grid.nelement()
+            # calculate the number of points
+            n_pts = n_pts // 3
+            # properation of points sampled in BAV space
+            n_bav_pts = n_pts * 0.2
+            n_bav_pts = int(n_bav_pts)
+            n_random_pts = n_pts - n_bav_pts
+
+            # random sampled points
+            bav_samples = bav_coords[np.random.randint(0, bav_coords.shape[0], (n_bav_pts, ))]
+            bav_samples = bav_samples / (vol_shape - 1) * 2 - 1
+            bav_samples = torch.from_numpy(bav_samples).float()
+            bav_samples = torch.flip(bav_samples, dims=[-1])
+
+            random_samples = self.sampler.sample(torch.tensor([n_random_pts, 3]))
+
+            samples = torch.cat((bav_samples, random_samples), dim=0)
+            samples = samples.reshape(self.reg_grid.size())
+
+            data["grids"] = samples
+        else:
+            raise ValueError(f"Unrecognized sampling mode {self.mode}.")
 
         return data
 
@@ -227,11 +269,11 @@ class SampleTarget:
         if data["grids"].size()[-2:0:-1] == data[self.key].size():
             data["targets"] = data[self.key][None, None]
         else:
-            data["grids"] = torch.flip(data["grids"], dims=(-1,))
             data["targets"] = F.grid_sample(data[self.key][None, None],
                 data["grids"][None], self.interpolation, align_corners=True)
-            # data["targets"] = data["targets"].permute(0, 1, 4, 3, 2)
-            data["grids"] = torch.flip(data["grids"], dims=(-1,))
+
+            data["targets"] = data["targets"].permute(0, 1, 4, 3, 2)
+
 
         return data
 

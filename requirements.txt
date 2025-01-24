@@ -1,0 +1,6 @@
+SimpleITK>=2.1.0
+pandas==1.2.0
+numpy==1.19.2
+tensorboardx==2.6.2.2 
+torch==1.11.0           
+torchvision==0.12.0          

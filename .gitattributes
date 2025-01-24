@@ -1,4 +1,0 @@
-sample_data/inference/pulse_00002.npz filter=lfs diff=lfs merge=lfs -text
-sample_data/inference/test.csv filter=lfs diff=lfs merge=lfs -text
-sample_data/training/pulse_00002.npz filter=lfs diff=lfs merge=lfs -text
-sample_data/training/train.csv filter=lfs diff=lfs merge=lfs -text

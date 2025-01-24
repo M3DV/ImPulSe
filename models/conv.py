@@ -49,3 +49,35 @@ class ConvBlock3d(nn.Module):
                 align_corners=True)
 
         return output
+
+
+class ConvBlock3d4X(nn.Module):
+
+    def __init__(self, in_channels, out_channels, kernel, norm, num_layers,
+            drop_prob, upsample=False, residual=True):
+        super().__init__()
+
+        conv_layers = [ConvLayer3d(in_channels, out_channels, kernel,
+            norm=norm, drop_prob=drop_prob) if i == 0 else
+            ConvLayer3d(out_channels, out_channels, kernel,
+            norm=norm, drop_prob=drop_prob)
+            for i in range(num_layers)]
+        self.conv_layers = nn.Sequential(*conv_layers)
+        self.residual = residual
+        if self.residual:
+            self.res_layer = ConvLayer3d(in_channels, out_channels, 1,
+                norm=norm, actv=None, drop_prob=drop_prob)
+        self.upsample = upsample
+
+    def forward(self, x):
+        output = self.conv_layers(x)
+
+        if self.residual:
+            res = self.res_layer(x)
+            output = res + output
+
+        if self.upsample:
+            output = F.interpolate(output, scale_factor=4, mode="trilinear",
+                align_corners=True)
+
+        return output
