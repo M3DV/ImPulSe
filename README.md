@@ -1,3 +1,5 @@
+Note the extended version is at [v2 branch](https://github.com/M3DV/ImPulSe/tree/impulse_V2), which will be finalized soon.
+
 # MICCAI 2022: What Makes for Automatic Reconstruction of Pulmonary Segments
 
 This is the official implementation of the MICCAI 2022 paper: *What Makes for Automatic Reconstruction of Pulmonary Segments*, created by Kaiming Kuang\*, Li Zhang\*, Jingyu Li, Hongwei Li, Jiajun Chen, Bo Du and Jiancheng Yang\*\*.
