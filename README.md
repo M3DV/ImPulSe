@@ -1,4 +1,4 @@
-# Supplmentary Materials of MedIA 2023 Submission
+# Supplmentary Materials of MedIA Submission
 
 This is the code of *Template-Guided Reconstruction of Pulmonary Segments with Neural Implicit Functions*.
 
